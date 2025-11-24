@@ -11,3 +11,6 @@ staticfiles
 node_modules
 .git
 .gitignore
+static
+staticfiles
+media
