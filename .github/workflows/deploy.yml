@@ -1,0 +1,69 @@
+name: Deploy Medtrax (Dockerized)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create builder
+        run: docker buildx create --use --driver docker-container
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push medtrax image
+        run: |
+          docker buildx build \
+            --cache-from=type=local,src=/tmp/.buildx-cache \
+            --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            -t agrim96336/medtrax-web:latest \
+            -f Dockerfile \
+            --push .
+
+      - name: Move new cache into place
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: SSH into EC2 and deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/medtrax-hms
+            git pull origin main
+            sudo docker compose down --remove-orphans
+            sudo docker compose pull web
+            sudo docker compose up -d
+            sleep 15
+            sudo docker cp medtrax-web:/app/static /home/ubuntu/medtrax-hms/ || true
+            sudo docker cp medtrax-web:/app/media /home/ubuntu/medtrax-hms/ || true
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/medtrax-hms/static
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/medtrax-hms/media
+            sudo chmod -R 755 /home/ubuntu/medtrax-hms/static
+            sudo chmod -R 755 /home/ubuntu/medtrax-hms/media
+            sudo systemctl restart nginx
+            sudo docker system prune -f
