@@ -1,2 +1,12 @@
 django
 djangorestframework
+djangorestframework-simplejwt
+drf-spectacular
+django-cors-headers
+python-decouple
+argon2-cffi
+django-redis
+redis
+whitenoise
+psycopg2-binary
+sendgrid
