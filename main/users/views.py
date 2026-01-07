@@ -215,34 +215,33 @@ class ResendSignupOTPView(APIView):
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class DoctorDetailsView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     @extend_schema(
         tags=['Profile Completion'],
         summary='Complete doctor profile',
+        description=(
+            'Saves doctor details for the authenticated user. '
+            'Requires Authorization: Bearer <access_token> from /login/. '
+        ),
         request=DoctorDetailsSerializer,
         responses={
-            201: OpenApiResponse(description='Profile created, tokens returned'),
-            400: OpenApiResponse(description='Validation error'),
-            404: OpenApiResponse(description='Account not found'),
+            201: OpenApiResponse(description='Profile created — no tokens returned'),
+            400: OpenApiResponse(description='Validation error or profile already exists'),
+            401: OpenApiResponse(description='No valid token — call /login/ first'),
         },
     )
     @transaction.atomic
     def post(self, request):
         try:
-            serializer = DoctorDetailsSerializer(data=request.data)
+            user = request.user  
+            if user.role != 'doctor':
+                return Response({'success': False, 'error': 'This account is registered as a patient, not a doctor.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if Doctor.objects.filter(user=user).exists() or user.is_profile_complete:
+                return Response({'success': False, 'error': 'Doctor profile already exists.'},status=status.HTTP_400_BAD_REQUEST)
+            serializer = DoctorDetailsSerializer(data=request.data,context={'exclude_user': user})
             if not serializer.is_valid():
                 return Response({'success': False, 'errors': serializer.errors},status=status.HTTP_400_BAD_REQUEST)
-            email = serializer.validated_data['email']
-            try:
-                user = CustomUser.objects.get(email=email)
-            except CustomUser.DoesNotExist:
-                return Response({'success': False, 'error': 'No account found. Please sign up first.'},status=status.HTTP_404_NOT_FOUND)
-            if not user.is_verified:
-                return Response({'success': False, 'error': 'Please verify your email before completing your profile.'},status=status.HTTP_400_BAD_REQUEST)
-            if user.role != 'doctor':
-                return Response({'success': False, 'error': 'This account is registered as a patient, not a doctor.'},status=status.HTTP_400_BAD_REQUEST)
-            if Doctor.objects.filter(user=user).exists() or user.is_profile_complete:
-                return Response({'success': False, 'error': 'Doctor profile already exists. Please login.'},status=status.HTTP_400_BAD_REQUEST)
             try:
                 doctor = Doctor.objects.create(
                     user=user,
@@ -270,15 +269,14 @@ class DoctorDetailsView(APIView):
                     emergency_contact_number=serializer.validated_data.get('emergency_contact_number', ''),
                 )
             except IntegrityError:
-                return Response({'success': False, 'error': 'Phone number already registered. Please use a different number.'},status=status.HTTP_400_BAD_REQUEST)
+                return Response({'success': False, 'error': 'Phone number already registered. Please use a different number.'},
+                                status=status.HTTP_400_BAD_REQUEST)
             user.is_profile_complete = True
             user.save(update_fields=['is_profile_complete'])
-            tokens = get_tokens_for_user(user)
-            logger.info(f"Doctor profile created: {email}")
+            logger.info(f"Doctor profile created: {user.email}")
             return Response({
                 'success': True,
                 'message': 'Doctor profile created successfully!',
-                **tokens,
                 'user': {
                     'user_id': user.id,
                     'username': user.username,
@@ -288,43 +286,42 @@ class DoctorDetailsView(APIView):
                     'specialization': doctor.specialization,
                     'department': doctor.department,
                     'is_approved': doctor.is_approved,
+                    'is_profile_complete': True,
                 },
             }, status=status.HTTP_201_CREATED)
+
         except Exception as e:
             logger.error(f"Doctor profile creation error: {e}")
             return Response({'success': False, 'error': 'Profile creation failed. Please try again.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+        
 class PatientDetailsView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     @extend_schema(
         tags=['Profile Completion'],
         summary='Complete patient profile',
+        description=(
+            'Saves patient details for the authenticated user. '
+            'Requires Authorization: Bearer <access_token> from /login/. '
+        ),
         request=PatientDetailsSerializer,
         responses={
-            201: OpenApiResponse(description='Profile created, tokens returned'),
-            400: OpenApiResponse(description='Validation error'),
-            404: OpenApiResponse(description='Account not found'),
+            201: OpenApiResponse(description='Profile created — no tokens returned'),
+            400: OpenApiResponse(description='Validation error or profile already exists'),
+            401: OpenApiResponse(description='No valid token — call /login/ first'),
         },
     )
     @transaction.atomic
     def post(self, request):
         try:
-            serializer = PatientDetailsSerializer(data=request.data)
-            if not serializer.is_valid():
-                return Response({'success': False, 'errors': serializer.errors},status=status.HTTP_400_BAD_REQUEST)
-            email = serializer.validated_data['email']
-            try:
-                user = CustomUser.objects.get(email=email)
-            except CustomUser.DoesNotExist:
-                return Response({'success': False, 'error': 'No account found. Please sign up first.'},status=status.HTTP_404_NOT_FOUND)
-            if not user.is_verified:
-                return Response({'success': False, 'error': 'Please verify your email before completing your profile.'},
-                                status=status.HTTP_400_BAD_REQUEST)
+            user = request.user 
             if user.role != 'patient':
                 return Response({'success': False, 'error': 'This account is registered as a doctor, not a patient.'},
                                 status=status.HTTP_400_BAD_REQUEST)
             if Patient.objects.filter(user=user).exists() or user.is_profile_complete:
-                return Response({'success': False, 'error': 'Patient profile already exists. Please login.'},status=status.HTTP_400_BAD_REQUEST)
+                return Response({'success': False, 'error': 'Patient profile already exists.'},status=status.HTTP_400_BAD_REQUEST)
+            serializer = PatientDetailsSerializer(data=request.data,context={'exclude_user': user})
+            if not serializer.is_valid():
+                return Response({'success': False, 'errors': serializer.errors},status=status.HTTP_400_BAD_REQUEST)
             try:
                 patient = Patient.objects.create(
                     user=user,
@@ -350,12 +347,10 @@ class PatientDetailsView(APIView):
                                 status=status.HTTP_400_BAD_REQUEST)
             user.is_profile_complete = True
             user.save(update_fields=['is_profile_complete'])
-            tokens = get_tokens_for_user(user)
-            logger.info(f"Patient profile created: {email}")
+            logger.info(f"Patient profile created: {user.email}")
             return Response({
                 'success': True,
                 'message': 'Patient profile created successfully!',
-                **tokens,
                 'user': {
                     'user_id': user.id,
                     'username': user.username,
@@ -364,12 +359,13 @@ class PatientDetailsView(APIView):
                     'profile_id': patient.id,
                     'gender': patient.gender,
                     'phone_number': patient.phone_number,
+                    'is_profile_complete': True,
                 },
             }, status=status.HTTP_201_CREATED)
         except Exception as e:
             logger.error(f"Patient profile creation error: {e}")
             return Response({'success': False, 'error': 'Profile creation failed. Please try again.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+                
 class LoginView(APIView):
     permission_classes = [AllowAny]
     @extend_schema(
@@ -393,14 +389,22 @@ class LoginView(APIView):
             user = serializer.validated_data['user']
             is_profile_complete = serializer.validated_data['is_profile_complete']
             role = user.role
+            tokens = get_tokens_for_user(user)
             if not is_profile_complete:
+                logger.info(f"Login (profile incomplete): {user.email} (role={role})")
                 return Response({
-                    'success': False,
-                    'is_profile_complete': False,
-                    'message': 'Profile incomplete. Please complete your profile first.',
-                    'email': user.email,
-                    'role': role,
-                }, status=status.HTTP_400_BAD_REQUEST)
+                    'success': True,
+                    'message': 'Login successful. Please complete your profile to continue.',
+                    **tokens,
+                    'username': user.username,
+                    'user': {
+                        'user_id': user.id,
+                        'username': user.username,
+                        'email': user.email,
+                        'role': role,
+                        'is_profile_complete': False,
+                    },
+                }, status=status.HTTP_200_OK)
             profile_data = {}
             if role == 'doctor':
                 try:
@@ -418,17 +422,18 @@ class LoginView(APIView):
                     return Response({'success': False, 'error': 'Patient profile not found. Please contact support.'},status=status.HTTP_404_NOT_FOUND)
             else:
                 return Response({'success': False, 'error': 'Unknown role. Please contact support.'},status=status.HTTP_400_BAD_REQUEST)
-            tokens = get_tokens_for_user(user)
             logger.info(f"Login successful: {user.email} (role={role})")
             return Response({
                 'success': True,
                 'message': 'Login successful!',
                 **tokens,
+                'username': user.username,
                 'user': {
                     'user_id': user.id,
                     'username': user.username,
                     'email': user.email,
                     'role': role,
+                    'is_profile_complete': True,
                     **profile_data,
                 },
             }, status=status.HTTP_200_OK)
@@ -439,7 +444,7 @@ class LoginView(APIView):
 class RefreshTokenView(APIView):
     permission_classes = [AllowAny]
     @extend_schema(
-        tags=['Token'],
+        tags=['Authentication'],
         summary='Refresh access token',
         request={'application/json': {
             'type': 'object',
@@ -468,7 +473,7 @@ class RefreshTokenView(APIView):
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
     @extend_schema(
-        tags=['Token'],
+        tags=['Authentication'],
         summary='Get current user info',
         responses={
             200: OpenApiResponse(description='User info returned'),
@@ -542,7 +547,7 @@ class LogoutView(APIView):
 class ForgotPasswordView(APIView):
     permission_classes = [AllowAny]
     @extend_schema(
-        tags=['Password Reset'],
+        tags=['Authentication'],
         summary='Request password reset OTP',
         request=ForgotPasswordSerializer,
         responses={
@@ -583,7 +588,7 @@ class ForgotPasswordView(APIView):
 class VerifyPasswordResetOTPView(APIView):
     permission_classes = [AllowAny]
     @extend_schema(
-        tags=['Password Reset'],
+        tags=['Authentication'],
         summary='Verify password reset OTP',
         request=VerifyPasswordResetOTPSerializer,
         responses={
@@ -605,7 +610,7 @@ class VerifyPasswordResetOTPView(APIView):
 class ResetPasswordView(APIView):
     permission_classes = [AllowAny]
     @extend_schema(
-        tags=['Password Reset'],
+        tags=['Authentication'],
         summary='Reset password',
         request=ResetPasswordSerializer,
         responses={
@@ -629,7 +634,7 @@ class ResetPasswordView(APIView):
 class ResendPasswordResetOTPView(APIView):
     permission_classes = [AllowAny]
     @extend_schema(
-        tags=['Password Reset'],
+        tags=['Authentication'],
         summary='Resend password reset OTP',
         request=ResendPasswordResetOTPSerializer,
         responses={
@@ -666,7 +671,7 @@ class ResendPasswordResetOTPView(APIView):
 class DeactivateAccountView(APIView):
     permission_classes = [IsAuthenticated]
     @extend_schema(
-        tags=['Account Management'],
+        tags=['Authentication'],
         summary='Deactivate account (reversible)',
         request={'application/json': {
             'type': 'object',
@@ -709,7 +714,7 @@ class DeactivateAccountView(APIView):
 class ReactivateAccountView(APIView):
     permission_classes = [AllowAny]
     @extend_schema(
-        tags=['Account Management'],
+        tags=['Authentication'],
         summary='Reactivate a deactivated account',
         request=ReactivateAccountSerializer,
         responses={
@@ -747,7 +752,7 @@ class ReactivateAccountView(APIView):
 class DeleteAccountView(APIView):
     permission_classes = [IsAuthenticated]
     @extend_schema(
-        tags=['Account Management'],
+        tags=['Authentication'],
         summary='Permanently delete account',
         request={'application/json': {
             'type': 'object',

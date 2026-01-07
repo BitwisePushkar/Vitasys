@@ -256,7 +256,6 @@ class ResendPasswordResetOTPSerializer(serializers.Serializer):
         return data
 
 class DoctorDetailsSerializer(serializers.Serializer):
-    email = serializers.EmailField(required=True)
     first_name = serializers.CharField(required=True, max_length=50)
     last_name = serializers.CharField(required=True, max_length=50)
     date_of_birth = serializers.DateField(required=True)
@@ -279,9 +278,6 @@ class DoctorDetailsSerializer(serializers.Serializer):
     alternate_email = serializers.EmailField(required=False, allow_blank=True)
     emergency_contact_person = serializers.CharField(required=False, allow_blank=True, max_length=100)
     emergency_contact_number = serializers.CharField(required=False, allow_blank=True, max_length=15)
-
-    def validate_email(self, value):
-        return value.strip().lower()
 
     def validate_first_name(self, value):
         value = value.strip()
@@ -382,7 +378,6 @@ class DoctorDetailsSerializer(serializers.Serializer):
 
 
 class PatientDetailsSerializer(serializers.Serializer):
-    email = serializers.EmailField(required=True)
     first_name = serializers.CharField(required=True, max_length=50)
     last_name = serializers.CharField(required=True, max_length=50)
     date_of_birth = serializers.DateField(required=True)
@@ -399,9 +394,6 @@ class PatientDetailsSerializer(serializers.Serializer):
     chronic_diseases = serializers.CharField(required=False, allow_blank=True, max_length=500)
     previous_surgeries = serializers.CharField(required=False, allow_blank=True, max_length=500)
     family_medical_history= serializers.CharField(required=False, allow_blank=True, max_length=500)
-
-    def validate_email(self, value):
-        return value.strip().lower()
 
     def validate_first_name(self, value):
         value = value.strip()
