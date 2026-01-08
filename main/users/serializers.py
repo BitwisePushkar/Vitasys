@@ -303,6 +303,7 @@ class DoctorDetailsSerializer(serializers.Serializer):
     alternate_email = serializers.EmailField(required=False, allow_blank=True)
     emergency_contact_person = serializers.CharField(required=False, allow_blank=True, max_length=100)
     emergency_contact_number = serializers.CharField(required=False, allow_blank=True, max_length=15)
+    profile_image = serializers.ImageField(required=False, allow_null=True) 
 
     def validate_first_name(self, v):
         return _validate_name(v, 'First name')
@@ -391,6 +392,7 @@ class PatientDetailsSerializer(serializers.Serializer):
     chronic_diseases = serializers.CharField(required=False, allow_blank=True, max_length=500)
     previous_surgeries = serializers.CharField(required=False, allow_blank=True, max_length=500)
     family_medical_history = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    profile_image = serializers.ImageField(required=False, allow_null=True) 
 
     def validate_first_name(self, v): 
         return _validate_name(v, 'First name')
@@ -464,6 +466,7 @@ class NurseDetailsSerializer(serializers.Serializer):
     city = serializers.CharField(required=True, max_length=100)
     state = serializers.CharField(required=False, allow_blank=True, max_length=100)
     country = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    profile_image = serializers.ImageField(required=False, allow_null=True) 
 
     def validate_first_name(self, v): 
         return _validate_name(v, 'First name')
@@ -535,6 +538,7 @@ class PharmacistDetailsSerializer(serializers.Serializer):
     city = serializers.CharField(required=True, max_length=100)
     state = serializers.CharField(required=False, allow_blank=True, max_length=100)
     country = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    profile_image = serializers.ImageField(required=False, allow_null=True) 
 
     def validate_first_name(self, v): 
         return _validate_name(v, 'First name')

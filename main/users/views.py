@@ -7,11 +7,12 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiResponse
 from users.models import CustomUser, Doctor, Patient, Nurse, Pharmacist, OTP_SEND_LIMIT
-from users.utils import send_otp_email
+from users.utils import send_otp_email, generate_profile_image_presigned_url
 from users.serializers import (
     SignupSerializer, VerifySignupOTPSerializer, ResendSignupOTPSerializer,
     DoctorDetailsSerializer, PatientDetailsSerializer,
@@ -230,6 +231,7 @@ class ResendSignupOTPView(APIView):
 
 class DoctorDetailsView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes     = [MultiPartParser, FormParser]  
     @extend_schema(
         tags=['Profile Completion'], summary='Complete doctor profile',
         request=DoctorDetailsSerializer,
@@ -247,6 +249,15 @@ class DoctorDetailsView(APIView):
             if not serializer.is_valid():
                 return Response({'success': False, 'errors': serializer.errors}, status=400)
             d = serializer.validated_data
+            presigned_data = None
+            public_url = None
+            image_file = request.FILES.get('profile_image')  
+            if image_file:
+                try:
+                    presigned_data = generate_profile_image_presigned_url(user, image_file)
+                    public_url = presigned_data['public_url']
+                except ValueError as e:
+                    return Response({'success': False, 'error': str(e)}, status=400)
             try:
                 doctor = Doctor.objects.create(
                     user=user,
@@ -268,22 +279,28 @@ class DoctorDetailsView(APIView):
                     alternate_email=d.get('alternate_email', ''),
                     emergency_contact_person=d.get('emergency_contact_person', ''),
                     emergency_contact_number=d.get('emergency_contact_number', ''),
+                    profile_image=public_url,
                 )
             except IntegrityError:
                 return Response({'success': False, 'error': 'Phone number already registered.'}, status=400)
             user.is_profile_complete = True
             user.save(update_fields=['is_profile_complete'])
             logger.info(f"Doctor profile created: {user.email}")
-            return Response({'success': True,'message': 'Doctor profile created successfully!',
-                             'user': {'user_id': user.id, 'username': user.username,'email': user.email, 'role': 'doctor',
-                                      'profile_id': doctor.id,'specialization': doctor.specialization,'department': doctor.department,
-                                      'is_approved': doctor.is_approved,'is_profile_complete': True,},}, status=201)
+            response_data = {'success': True,'message': 'Doctor profile created successfully!',
+                             'user': {'user_id':user.id,'username':user.username,'email':user.email,'role':'doctor',
+                                      'profile_id':doctor.id,'specialization': doctor.specialization,'department': doctor.department,
+                                      'is_approved': doctor.is_approved,'is_profile_complete': True,'profile_image': doctor.profile_image,},}
+            if presigned_data:
+                response_data['image_upload'] = {'presigned_url': presigned_data['presigned_url'],'public_url': presigned_data['public_url'],
+                                                 'expires_in': presigned_data['expires_in'],}
+            return Response(response_data, status=201)
         except Exception as e:
             logger.error(f"Doctor profile error: {e}")
             return Response({'success': False, 'error': 'Profile creation failed.'}, status=500)
 
 class PatientDetailsView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]  
     @extend_schema(
         tags=['Profile Completion'], summary='Complete patient profile',
         request=PatientDetailsSerializer,
@@ -301,6 +318,15 @@ class PatientDetailsView(APIView):
             if not serializer.is_valid():
                 return Response({'success': False, 'errors': serializer.errors}, status=400)
             d = serializer.validated_data
+            presigned_data = None
+            public_url = None
+            image_file = request.FILES.get('profile_image')
+            if image_file:
+                try:
+                    presigned_data = generate_profile_image_presigned_url(user, image_file)
+                    public_url = presigned_data['public_url']
+                except ValueError as e:
+                    return Response({'success': False, 'error': str(e)}, status=400)
             try:
                 patient = Patient.objects.create(
                     user=user,
@@ -316,22 +342,28 @@ class PatientDetailsView(APIView):
                     chronic_diseases=d.get('chronic_diseases', ''),
                     previous_surgeries=d.get('previous_surgeries', ''),
                     family_medical_history=d.get('family_medical_history', ''),
+                    profile_image=public_url, 
                 )
             except IntegrityError:
                 return Response({'success': False, 'error': 'Phone number already registered.'}, status=400)
             user.is_profile_complete = True
             user.save(update_fields=['is_profile_complete'])
             logger.info(f"Patient profile created: {user.email}")
-            return Response({'success': True,'message': 'Patient profile created successfully!',
-                             'user': {'user_id': user.id, 'username': user.username,'email': user.email, 'role': 'patient',
-                                      'profile_id': patient.id,'gender': patient.gender,'phone_number': patient.phone_number,
-                                      'is_profile_complete': True,},}, status=201)
+            response_data = {'success': True,'message': 'Patient profile created successfully!',
+                             'user': {'user_id':user.id,'username':user.username,'email':user.email,'role':'patient',
+                                      'profile_id':patient.id,'gender':patient.gender,'phone_number':patient.phone_number,
+                                      'is_profile_complete':True,'profile_image': patient.profile_image, },}
+            if presigned_data:
+                response_data['image_upload'] = {'presigned_url': presigned_data['presigned_url'],'public_url':presigned_data['public_url'],
+                                                 'expires_in':presigned_data['expires_in'],}
+            return Response(response_data, status=201)
         except Exception as e:
             logger.error(f"Patient profile error: {e}")
             return Response({'success': False, 'error': 'Profile creation failed.'}, status=500)
 
 class NurseDetailsView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser] 
     @extend_schema(
         tags=['Profile Completion'], summary='Complete nurse profile',
         request=NurseDetailsSerializer,
@@ -349,6 +381,15 @@ class NurseDetailsView(APIView):
             if not serializer.is_valid():
                 return Response({'success': False, 'errors': serializer.errors}, status=400)
             d = serializer.validated_data
+            presigned_data = None
+            public_url = None
+            image_file = request.FILES.get('profile_image')
+            if image_file:
+                try:
+                    presigned_data = generate_profile_image_presigned_url(user, image_file)
+                    public_url = presigned_data['public_url']
+                except ValueError as e:
+                    return Response({'success': False, 'error': str(e)}, status=400)
             try:
                 nurse = Nurse.objects.create(
                     user=user,
@@ -362,22 +403,28 @@ class NurseDetailsView(APIView):
                     city=d['city'],
                     state=d.get('state', ''),
                     country=d.get('country', ''),
+                    profile_image=public_url,
                 )
             except IntegrityError:
                 return Response({'success': False, 'error': 'Phone number or employee ID already registered.'}, status=400)
             user.is_profile_complete = True
             user.save(update_fields=['is_profile_complete'])
             logger.info(f"Nurse profile created: {user.email}")
-            return Response({'success': True,'message': 'Nurse profile created successfully!',
-                             'user': {'user_id': user.id, 'username': user.username,'email': user.email, 'role': 'nurse','profile_id': nurse.id,
-                                      'department': nurse.department,'employee_id': nurse.employee_id,'is_approved': nurse.is_approved,
-                                      'is_profile_complete': True,},}, status=201)
+            response_data = {'success': True,'message': 'Nurse profile created successfully!',
+                             'user': {'user_id':user.id,'username':user.username,'email':user.email,'role':'nurse',
+                                      'profile_id':nurse.id,'department':nurse.department,'employee_id':nurse.employee_id,'is_approved':nurse.is_approved,
+                                      'is_profile_complete':True,'profile_image':nurse.profile_image,},}
+            if presigned_data:
+                response_data['image_upload'] = {'presigned_url': presigned_data['presigned_url'],'public_url':presigned_data['public_url'],
+                                                 'expires_in':presigned_data['expires_in'],}
+            return Response(response_data, status=201)
         except Exception as e:
             logger.error(f"Nurse profile error: {e}")
             return Response({'success': False, 'error': 'Profile creation failed.'}, status=500)
 
 class PharmacistDetailsView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes     = [MultiPartParser, FormParser]  
     @extend_schema(
         tags=['Profile Completion'], summary='Complete pharmacist profile',
         request=PharmacistDetailsSerializer,
@@ -395,6 +442,15 @@ class PharmacistDetailsView(APIView):
             if not serializer.is_valid():
                 return Response({'success': False, 'errors': serializer.errors}, status=400)
             d = serializer.validated_data
+            presigned_data = None
+            public_url = None
+            image_file = request.FILES.get('profile_image')
+            if image_file:
+                try:
+                    presigned_data = generate_profile_image_presigned_url(user, image_file)
+                    public_url = presigned_data['public_url']
+                except ValueError as e:
+                    return Response({'success': False, 'error': str(e)}, status=400)
             try:
                 pharmacist = Pharmacist.objects.create(
                     user=user,
@@ -408,16 +464,21 @@ class PharmacistDetailsView(APIView):
                     city=d['city'],
                     state=d.get('state', ''),
                     country=d.get('country', ''),
+                    profile_image=public_url,  
                 )
             except IntegrityError:
                 return Response({'success': False, 'error': 'Phone number, license number, or employee ID already registered.'}, status=400)
             user.is_profile_complete = True
             user.save(update_fields=['is_profile_complete'])
             logger.info(f"Pharmacist profile created: {user.email}")
-            return Response({'success': True,'message': 'Pharmacist profile created successfully!',
-                             'user': {'user_id': user.id, 'username': user.username,'email': user.email, 'role': 'pharmacist',
-                                      'profile_id': pharmacist.id,'license_number': pharmacist.license_number,'employee_id': pharmacist.employee_id,
-                                      'is_approved': pharmacist.is_approved,'is_profile_complete': True,},}, status=201)
+            response_data = {'success': True,'message': 'Pharmacist profile created successfully!',
+                             'user': {'user_id' : user.id,'username' : user.username,'email' : user.email,'role' : 'pharmacist',
+                                      'profile_id' : pharmacist.id,'license_number' : pharmacist.license_number,'employee_id' : pharmacist.employee_id,
+                                      'is_approved' : pharmacist.is_approved,'is_profile_complete': True,'profile_image' : pharmacist.profile_image, },}
+            if presigned_data:
+                response_data['image_upload'] = {'presigned_url': presigned_data['presigned_url'],'public_url' : presigned_data['public_url'],
+                                                 'expires_in' : presigned_data['expires_in'],}
+            return Response(response_data, status=201)
         except Exception as e:
             logger.error(f"Pharmacist profile error: {e}")
             return Response({'success': False, 'error': 'Profile creation failed.'}, status=500)

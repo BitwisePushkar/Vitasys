@@ -2,8 +2,30 @@ import threading
 import logging
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
+import boto3
+import uuid
+from django.conf import settings
+
 
 logger = logging.getLogger(__name__)
+ALLOWED_IMAGE_TYPES = {'image/jpeg': 'jpg','image/png' : 'png','image/webp': 'webp',}
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024 
+
+def generate_profile_image_presigned_url(user, image_file) -> dict:
+    file_type = image_file.content_type 
+    file_size = image_file.size         
+    if file_type not in ALLOWED_IMAGE_TYPES:
+        raise ValueError("Unsupported file type. Allowed: jpeg, png, webp.")
+    if file_size > MAX_IMAGE_SIZE_BYTES:
+        raise ValueError(f"File size {round(file_size / 1024 / 1024, 2)} MB exceeds the 5 MB limit.")
+    ext = ALLOWED_IMAGE_TYPES[file_type]
+    key = f"profile-images/{user.role}/{user.id}/{uuid.uuid4()}.{ext}"
+    public_url = (f"https://{settings.AWS_STORAGE_BUCKET_NAME}"f".s3.{settings.AWS_S3_REGION_NAME}"f".amazonaws.com/{key}")
+    s3 = boto3.client('s3',aws_access_key_id = settings.AWS_ACCESS_KEY_ID,aws_secret_access_key = settings.AWS_SECRET_ACCESS_KEY,
+                      region_name = settings.AWS_S3_REGION_NAME,)
+    presigned_url = s3.generate_presigned_url('put_object',Params={'Bucket': settings.AWS_STORAGE_BUCKET_NAME,'Key' : key,
+                                                                   'ContentType': file_type,'ACL': 'public-read',},ExpiresIn=300, )
+    return {'presigned_url': presigned_url,'public_url': public_url,'key': key,'expires_in': 300,}
 
 def _build_email_content(otp: str, email_type: str) -> tuple[str, str, str]:
     config_map = {
