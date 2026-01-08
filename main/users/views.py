@@ -21,6 +21,8 @@ from users.serializers import (
     ResendPasswordResetOTPSerializer, DeleteAccountSerializer,
     DeactivateAccountSerializer, ReactivateAccountSerializer,
 )
+from users.authentication import blocklist_token
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 
 logger = logging.getLogger(__name__)
 
@@ -467,9 +469,17 @@ class RefreshTokenView(APIView):
             return Response({'success': False, 'error': 'Refresh token is required.'}, status=400)
         try:
             refresh = RefreshToken(refresh_token)
-            return Response({'success': True, 'access_token': str(refresh.access_token)})
+            old_access = request.data.get('access_token')
+            if old_access:
+                try:
+                    token_obj = AccessToken(old_access)
+                    blocklist_token(token_obj)
+                except TokenError:
+                    pass 
+            new_access = str(refresh.access_token)
+            return Response({'success': True, 'access_token': new_access})
         except TokenError:
-            return Response({'success': False, 'error': 'Invalid or expired refresh token. Please login again.'}, status=401)
+            return Response({'success': False, 'error': 'Invalid or expired refresh token.'}, status=401)
         except Exception as e:
             logger.error(f"Token refresh error: {e}")
             return Response({'success': False, 'error': 'Token refresh failed.'}, status=500)
@@ -493,21 +503,21 @@ class MeView(APIView):
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
     @extend_schema(
-        tags=['Authentication'], summary='Logout — blacklist refresh token',
-        responses={200: OpenApiResponse(description='Logged out'), 400: OpenApiResponse(description='Token missing')},
+        tags=['Authentication'], summary='Logout — revoke all tokens',
+        responses={200: OpenApiResponse(description='Logged out')},
     )
     def post(self, request):
         refresh_token = request.data.get('refresh_token')
         if not refresh_token:
-            return Response({'success': False, 'error': 'Refresh token is required to logout.'}, status=400)
+            return Response({'success': False, 'error': 'Refresh token is required.'}, status=400)
+        if request.auth:
+            blocklist_token(request.auth)
         try:
             RefreshToken(refresh_token).blacklist()
         except TokenError:
-            pass
-        except Exception as e:
-            logger.error(f"Logout error: {e}")
+            pass  
         logger.info(f"Logout: {request.user.email}")
-        return Response({'success': True, 'message': 'Logged out successfully.'})
+        return Response({'success': True, 'message': 'Logged out successfully. All tokens revoked.'})
 
 class ForgotPasswordView(APIView):
     permission_classes = [AllowAny]
@@ -625,6 +635,8 @@ class DeactivateAccountView(APIView):
             refresh_token = request.data.get('refresh_token')
             if not refresh_token:
                 return Response({'success': False, 'error': 'refresh_token is required.'}, status=400)
+            if request.auth:
+                blocklist_token(request.auth)
             try:
                 RefreshToken(refresh_token).blacklist()
             except TokenError:
