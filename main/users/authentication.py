@@ -13,8 +13,6 @@ class JWTAuthentication(BaseJWTAuthentication):
             return None
         user, token = result
         if not user.is_active:
-            raise exceptions.AuthenticationFailed(
-                _('This account has been deactivated. Please contact support or reactivate your account.'),
-                code='user_inactive',
-            )
+            raise exceptions.AuthenticationFailed(_('This account has been deactivated. Please contact support or reactivate your account.'),
+                                                  code='user_inactive',)
         return user, token

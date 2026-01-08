@@ -1,43 +1,24 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser, Doctor, Patient
+from .models import CustomUser, Doctor, Patient, Nurse, Pharmacist
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
-
     list_display = ['email', 'username', 'role', 'is_verified', 'is_profile_complete', 'is_active', 'created_at']
     list_filter = ['role', 'is_verified', 'is_profile_complete', 'is_active', 'is_staff', 'created_at']
     search_fields = ['email', 'username', 'first_name', 'last_name']
     ordering = ['-created_at']
     readonly_fields = ['created_at', 'updated_at', 'last_login', 'otp_created_at', 'login_locked_until', 'otp_locked_until']
-
     fieldsets = (
-        ('Account Info', {'fields': ('username', 'email', 'password')}),
-        ('Role & Verification', {'fields': ('role', 'is_verified', 'is_profile_complete')}),
-        ('OTP & Security', {
-            'fields': ('otp', 'otp_type', 'otp_created_at', 'otp_attempts', 'otp_locked_until'),
-            'classes': ('collapse',)
-        }),
-        ('Login Security', {
-            'fields': ('login_attempts', 'login_locked_until'),
-            'classes': ('collapse',)
-        }),
-        ('Permissions', {
-            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
-            'classes': ('collapse',)
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at', 'last_login'),
-            'classes': ('collapse',)
-        }),
+        ('Account Info',{'fields': ('username', 'email', 'password')}),
+        ('Role & Verification',{'fields': ('role', 'is_verified', 'is_profile_complete')}),
+        ('OTP & Security', {'fields': ('otp', 'otp_type', 'otp_created_at', 'otp_attempts', 'otp_locked_until'), 'classes': ('collapse',)}),
+        ('Login Security', {'fields': ('login_attempts', 'login_locked_until'), 'classes': ('collapse',)}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'), 'classes': ('collapse',)}),
+        ('Timestamps', {'fields': ('created_at', 'updated_at', 'last_login'), 'classes': ('collapse',)}),
     )
 
-    add_fieldsets = (
-        ('Create New User', {
-            'classes': ('wide',),
-            'fields': ('username', 'email', 'password1', 'password2', 'role', 'is_verified', 'is_profile_complete'),
-        }),
-    )
+    add_fieldsets = (('Create New User', {'classes': ('wide',),'fields' : ('username', 'email', 'password1', 'password2', 'role', 'is_verified', 'is_profile_complete'),}),)
 
     actions = ['verify_users', 'mark_profile_complete', 'reset_otp_locks']
 
@@ -56,10 +37,8 @@ class CustomUserAdmin(UserAdmin):
         self.message_user(request, f'{updated} user(s) unlocked successfully.')
     reset_otp_locks.short_description = "Reset OTP/Login locks"
 
-
 @admin.register(Doctor)
 class DoctorAdmin(admin.ModelAdmin):
-
     list_display = ['id', 'get_full_name', 'specialization', 'department', 'city', 'phone_number', 'is_approved', 'created_at']
     list_filter = ['is_approved', 'gender', 'specialization', 'department', 'city', 'blood_group', 'created_at']
     search_fields = ['first_name', 'last_name', 'user__email', 'user__username', 'phone_number', 'registration_number', 'specialization']
@@ -71,16 +50,16 @@ class DoctorAdmin(admin.ModelAdmin):
         ('Personal Information', {'fields': ('first_name', 'last_name', 'date_of_birth', 'gender', 'blood_group', 'marital_status')}),
         ('Contact Information', {'fields': ('phone_number', 'alternate_phone_number', 'alternate_email', 'emergency_contact_person', 'emergency_contact_number')}),
         ('Address', {'fields': ('address', 'city', 'state', 'pincode', 'country')}),
-        ('Professional Information', {'fields': ('registration_number', 'specialization', 'qualification', 'years_of_experience', 'department', 'clinic_name')}),
-        ('Approval Status', {'fields': ('is_approved',)}),
-        ('Timestamps', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
+        ('Professional Information',{'fields': ('registration_number', 'specialization', 'qualification', 'years_of_experience', 'department', 'clinic_name')}),
+        ('Approval Status',{'fields': ('is_approved',)}),
+        ('Timestamps',{'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
 
     actions = ['approve_doctors', 'disapprove_doctors']
 
     def approve_doctors(self, request, queryset):
         updated = queryset.update(is_approved=True)
-        self.message_user(request, f'{updated} doctor(s) approved successfully.')
+        self.message_user(request, f'{updated} doctor(s) approved.')
     approve_doctors.short_description = "Approve selected doctors"
 
     def disapprove_doctors(self, request, queryset):
@@ -88,10 +67,8 @@ class DoctorAdmin(admin.ModelAdmin):
         self.message_user(request, f'{updated} doctor(s) disapproved.')
     disapprove_doctors.short_description = "Disapprove selected doctors"
 
-
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
-
     list_display = ['id', 'get_full_name', 'gender', 'blood_group', 'city', 'phone_number', 'is_insurance', 'created_at']
     list_filter = ['gender', 'blood_group', 'city', 'is_insurance', 'created_at']
     search_fields = ['first_name', 'last_name', 'user__email', 'user__username', 'phone_number']
@@ -102,10 +79,65 @@ class PatientAdmin(admin.ModelAdmin):
         ('User Account', {'fields': ('user',)}),
         ('Personal Information', {'fields': ('first_name', 'last_name', 'date_of_birth', 'gender', 'blood_group', 'city')}),
         ('Contact Information', {'fields': ('phone_number', 'emergency_contact', 'emergency_email')}),
-        ('Insurance Information', {'fields': ('is_insurance', 'ins_company_name', 'ins_policy_number')}),
-        ('Medical History', {
-            'fields': ('known_allergies', 'chronic_diseases', 'previous_surgeries', 'family_medical_history'),
-            'classes': ('collapse',)
-        }),
+        ('Insurance Information',{'fields': ('is_insurance', 'ins_company_name', 'ins_policy_number')}),
+        ('Medical History',{'fields': ('known_allergies', 'chronic_diseases', 'previous_surgeries', 'family_medical_history'), 'classes': ('collapse',)}),
+        ('Timestamps',{'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
+    )
+
+@admin.register(Nurse)
+class NurseAdmin(admin.ModelAdmin):
+    list_display = ['id', 'get_full_name', 'department', 'phone_number', 'employee_id', 'city', 'is_approved', 'created_at']
+    list_filter = ['is_approved', 'gender', 'department', 'city', 'created_at']
+    search_fields = ['first_name', 'last_name', 'user__email', 'user__username', 'phone_number', 'employee_id', 'department']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('User Account', {'fields': ('user',)}),
+        ('Personal Information', {'fields': ('first_name', 'last_name', 'date_of_birth', 'gender', 'blood_group')}),
+        ('Contact & Location', {'fields': ('phone_number', 'city', 'state', 'country')}),
+        ('Professional Information',{'fields': ('department', 'qualification', 'years_of_experience', 'employee_id')}),
+        ('Approval Status',{'fields': ('is_approved',)}),
+        ('Timestamps',{'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
+    )
+
+    actions = ['approve_nurses', 'disapprove_nurses']
+
+    def approve_nurses(self, request, queryset):
+        updated = queryset.update(is_approved=True)
+        self.message_user(request, f'{updated} nurse(s) approved.')
+    approve_nurses.short_description = "Approve selected nurses"
+
+    def disapprove_nurses(self, request, queryset):
+        updated = queryset.update(is_approved=False)
+        self.message_user(request, f'{updated} nurse(s) disapproved.')
+    disapprove_nurses.short_description = "Disapprove selected nurses"
+
+@admin.register(Pharmacist)
+class PharmacistAdmin(admin.ModelAdmin):
+    list_display = ['id', 'get_full_name', 'license_number', 'phone_number', 'employee_id', 'city', 'is_approved', 'created_at']
+    list_filter = ['is_approved', 'gender', 'city', 'created_at']
+    search_fields = ['first_name', 'last_name', 'user__email', 'user__username', 'phone_number', 'license_number', 'employee_id']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('User Account', {'fields': ('user',)}),
+        ('Personal Information', {'fields': ('first_name', 'last_name', 'date_of_birth', 'gender', 'blood_group')}),
+        ('Contact & Location', {'fields': ('phone_number', 'city', 'state', 'country')}),
+        ('Professional Information',{'fields': ('license_number', 'qualification', 'years_of_experience', 'employee_id')}),
+        ('Approval Status', {'fields': ('is_approved',)}),
         ('Timestamps', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
+
+    actions = ['approve_pharmacists', 'disapprove_pharmacists']
+
+    def approve_pharmacists(self, request, queryset):
+        updated = queryset.update(is_approved=True)
+        self.message_user(request, f'{updated} pharmacist(s) approved.')
+    approve_pharmacists.short_description = "Approve selected pharmacists"
+
+    def disapprove_pharmacists(self, request, queryset):
+        updated = queryset.update(is_approved=False)
+        self.message_user(request, f'{updated} pharmacist(s) disapproved.')
+    disapprove_pharmacists.short_description = "Disapprove selected pharmacists"
