@@ -12,7 +12,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiResponse
 from users.models import CustomUser, Doctor, Patient, Nurse, Pharmacist, OTP_SEND_LIMIT
-from users.utils import send_otp_email, generate_profile_image_presigned_url
+from users.utils import send_otp_email, upload_image
 from users.serializers import (
     SignupSerializer, VerifySignupOTPSerializer, ResendSignupOTPSerializer,
     DoctorDetailsSerializer, PatientDetailsSerializer,
@@ -249,13 +249,11 @@ class DoctorDetailsView(APIView):
             if not serializer.is_valid():
                 return Response({'success': False, 'errors': serializer.errors}, status=400)
             d = serializer.validated_data
-            presigned_data = None
             public_url = None
             image_file = request.FILES.get('profile_image')  
             if image_file:
                 try:
-                    presigned_data = generate_profile_image_presigned_url(user, image_file)
-                    public_url = presigned_data['public_url']
+                    public_url = upload_image(user, image_file)
                 except ValueError as e:
                     return Response({'success': False, 'error': str(e)}, status=400)
             try:
@@ -290,14 +288,103 @@ class DoctorDetailsView(APIView):
                              'user': {'user_id':user.id,'username':user.username,'email':user.email,'role':'doctor',
                                       'profile_id':doctor.id,'specialization': doctor.specialization,'department': doctor.department,
                                       'is_approved': doctor.is_approved,'is_profile_complete': True,'profile_image': doctor.profile_image,},}
-            if presigned_data:
-                response_data['image_upload'] = {'presigned_url': presigned_data['presigned_url'],'public_url': presigned_data['public_url'],
-                                                 'expires_in': presigned_data['expires_in'],}
             return Response(response_data, status=201)
         except Exception as e:
             logger.error(f"Doctor profile error: {e}")
             return Response({'success': False, 'error': 'Profile creation failed.'}, status=500)
+    
+    @extend_schema(
+    tags=['Profile Completion'],
+    summary='Get doctor profile',
+    responses={200: DoctorDetailsSerializer},
+    )
+    def get(self, request):
+        if request.user.role != 'doctor':
+            return Response({'success': False, 'error': 'Access denied.'}, status=403)
+        try:
+            d = Doctor.objects.get(user=request.user)
+        except Doctor.DoesNotExist:
+            return Response({'success': False, 'error': 'Profile not found. Please complete your profile first.'}, status=404)
+        return Response({'success': True,'user': {'user_id': request.user.id,'username' : request.user.username,'email' : request.user.email,
+                                                  'role' : 'doctor','is_profile_complete': request.user.is_profile_complete,'profile_id' : d.id,
+                                                  'first_name' : d.first_name,'last_name' : d.last_name,'date_of_birth':d.date_of_birth,'gender': d.gender,
+                                                  'blood_group': d.blood_group,'marital_status': d.marital_status,'address' : d.address,'city' : d.city,
+                                                  'state': d.state,'pincode' : d.pincode,'country' : d.country,'phone_number' : d.phone_number,'alternate_phone_number': d.alternate_phone_number,
+                                                  'alternate_email' : d.alternate_email,'registration_number' : d.registration_number,'specialization' : d.specialization,'qualification' : d.qualification,
+                                                  'years_of_experience': d.years_of_experience,'department' : d.department,'clinic_name' : d.clinic_name,'emergency_contact_person': d.emergency_contact_person,
+                                                  'emergency_contact_number': d.emergency_contact_number,'profile_image' : d.profile_image,'is_approved' : d.is_approved,}})
 
+    @extend_schema(
+    tags=['Profile Completion'],
+    summary='Update doctor profile',
+    request=DoctorDetailsSerializer,
+    responses={200: DoctorDetailsSerializer},
+    )
+    @transaction.atomic
+    def patch(self, request):
+        if request.user.role != 'doctor':
+            return Response({'success': False, 'error': 'Access denied.'}, status=403)
+        try:
+            d = Doctor.objects.get(user=request.user)
+        except Doctor.DoesNotExist:
+            return Response({'success': False, 'error': 'Profile not found.'}, status=404)
+        data = request.data
+        if 'first_name' in data:
+            d.first_name = data['first_name'].strip()
+        if 'last_name' in data:
+            d.last_name = data['last_name'].strip()
+        if 'date_of_birth' in data:
+            d.date_of_birth = data['date_of_birth']
+        if 'gender' in data:
+            d.gender = data['gender']
+        if 'blood_group' in data:
+            d.blood_group = data['blood_group']
+        if 'marital_status' in data:
+            d.marital_status = data['marital_status']
+        if 'address' in data:
+            d.address = data['address']
+        if 'city' in data:
+            d.city = data['city']
+        if 'state' in data:
+            d.state = data['state']
+        if 'pincode' in data:
+            d.pincode = data['pincode']
+        if 'country' in data:
+            d.country = data['country']
+        if 'phone_number' in data:
+            d.phone_number = data['phone_number']
+        if 'alternate_phone_number' in data:
+            d.alternate_phone_number = data['alternate_phone_number']
+        if 'alternate_email' in data:
+            d.alternate_email = data['alternate_email']
+        if 'emergency_contact_person' in data:
+            d.emergency_contact_person = data['emergency_contact_person']
+        if 'emergency_contact_number' in data:
+            d.emergency_contact_number = data['emergency_contact_number']
+        if 'specialization' in data:
+            d.specialization = data['specialization']
+        if 'qualification' in data:
+            d.qualification = data['qualification']
+        if 'years_of_experience' in data:
+            d.years_of_experience = data['years_of_experience']
+        if 'department' in data:
+            d.department = data['department']
+        if 'clinic_name' in data:
+            d.clinic_name = data['clinic_name']
+        if 'registration_number' in data:
+            d.registration_number = data['registration_number']
+        image_file = request.FILES.get('profile_image')
+        if image_file:
+            try:
+                d.profile_image = upload_image(request.user, image_file)
+            except ValueError as e:
+                return Response({'success': False, 'error': str(e)}, status=400)
+        d.save()
+        return Response({'success': True,'message': 'Profile updated successfully.',
+                         'user': {'user_id': request.user.id,'email': request.user.email,'role': 'doctor',
+                                  'first_name': d.first_name,'last_name': d.last_name,'gender': d.gender,'specialization': d.specialization,
+                                  'department': d.department,'profile_image': d.profile_image,'is_approved' : d.is_approved,}})
+        
 class PatientDetailsView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]  
@@ -318,13 +405,11 @@ class PatientDetailsView(APIView):
             if not serializer.is_valid():
                 return Response({'success': False, 'errors': serializer.errors}, status=400)
             d = serializer.validated_data
-            presigned_data = None
             public_url = None
             image_file = request.FILES.get('profile_image')
             if image_file:
                 try:
-                    presigned_data = generate_profile_image_presigned_url(user, image_file)
-                    public_url = presigned_data['public_url']
+                    public_url = upload_image(user, image_file)
                 except ValueError as e:
                     return Response({'success': False, 'error': str(e)}, status=400)
             try:
@@ -353,13 +438,88 @@ class PatientDetailsView(APIView):
                              'user': {'user_id':user.id,'username':user.username,'email':user.email,'role':'patient',
                                       'profile_id':patient.id,'gender':patient.gender,'phone_number':patient.phone_number,
                                       'is_profile_complete':True,'profile_image': patient.profile_image, },}
-            if presigned_data:
-                response_data['image_upload'] = {'presigned_url': presigned_data['presigned_url'],'public_url':presigned_data['public_url'],
-                                                 'expires_in':presigned_data['expires_in'],}
             return Response(response_data, status=201)
         except Exception as e:
             logger.error(f"Patient profile error: {e}")
             return Response({'success': False, 'error': 'Profile creation failed.'}, status=500)
+
+    @extend_schema(
+    tags=['Profile Completion'],
+    summary='Get pharmacist profile',
+    responses={200: PharmacistDetailsSerializer},
+    )
+    def get(self, request):
+        if request.user.role != 'patient':
+            return Response({'success': False, 'error': 'Access denied.'}, status=403)
+        try:
+            p = Patient.objects.get(user=request.user)
+        except Patient.DoesNotExist:
+            return Response({'success': False, 'error': 'Profile not found. Please complete your profile first.'}, status=404)
+        return Response({'success': True,'user': {'user_id': request.user.id,'username': request.user.username,'email': request.user.email,'role': 'patient',
+                                                  'is_profile_complete': request.user.is_profile_complete,'profile_id': p.id,'first_name': p.first_name,'last_name': p.last_name,
+                                                  'date_of_birth': p.date_of_birth,'gender': p.gender,'blood_group': p.blood_group,'city': p.city,'phone_number': p.phone_number,
+                                                  'emergency_contact': p.emergency_contact,'emergency_email': p.emergency_email,'is_insurance': p.is_insurance,'ins_company_name': p.ins_company_name,
+                                                  'ins_policy_number': p.ins_policy_number,'known_allergies': p.known_allergies,'chronic_diseases': p.chronic_diseases,'previous_surgeries': p.previous_surgeries,
+                                                  'family_medical_history': p.family_medical_history,'profile_image': p.profile_image,}})
+
+    @extend_schema(
+    tags=['Profile Completion'],
+    summary='Update pharmacist profile',
+    request=PharmacistDetailsSerializer,
+    responses={200: PharmacistDetailsSerializer},
+    )
+    @transaction.atomic
+    def patch(self, request):
+        if request.user.role != 'patient':
+            return Response({'success': False, 'error': 'Access denied.'}, status=403)
+        try:
+            p = Patient.objects.get(user=request.user)
+        except Patient.DoesNotExist:
+            return Response({'success': False, 'error': 'Profile not found.'}, status=404)
+        data = request.data
+        if 'first_name' in data:
+            p.first_name = data['first_name'].strip()
+        if 'last_name' in data:
+            p.last_name = data['last_name'].strip()
+        if 'date_of_birth' in data:
+            p.date_of_birth = data['date_of_birth']
+        if 'gender' in data:
+            p.gender = data['gender']
+        if 'blood_group' in data:
+            p.blood_group = data['blood_group']
+        if 'city' in data:
+            p.city = data['city']
+        if 'phone_number' in data:
+            p.phone_number = data['phone_number']
+        if 'emergency_contact' in data:
+            p.emergency_contact = data['emergency_contact']
+        if 'emergency_email' in data:
+            p.emergency_email = data['emergency_email']
+        if 'is_insurance' in data:
+            p.is_insurance = data['is_insurance']
+        if 'ins_company_name' in data:
+            p.ins_company_name = data['ins_company_name']
+        if 'ins_policy_number' in data:
+            p.ins_policy_number = data['ins_policy_number']
+        if 'known_allergies' in data:
+            p.known_allergies = data['known_allergies']
+        if 'chronic_diseases' in data:
+            p.chronic_diseases = data['chronic_diseases']
+        if 'previous_surgeries' in data:
+            p.previous_surgeries = data['previous_surgeries']
+        if 'family_medical_history' in data:
+            p.family_medical_history = data['family_medical_history']
+        image_file = request.FILES.get('profile_image')
+        if image_file:
+            try:
+                p.profile_image = upload_image(request.user, image_file)
+            except ValueError as e:
+                return Response({'success': False, 'error': str(e)}, status=400)
+        p.save()
+        return Response({'success': True,'message': 'Profile updated successfully.',
+                         'user': {'user_id' : request.user.id,'email' : request.user.email,'role' : 'patient',
+                                  'first_name' : p.first_name,'last_name' : p.last_name,'gender' : p.gender,'blood_group' : p.blood_group,
+                                  'phone_number': p.phone_number,'profile_image': p.profile_image,}})
 
 class NurseDetailsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -381,13 +541,11 @@ class NurseDetailsView(APIView):
             if not serializer.is_valid():
                 return Response({'success': False, 'errors': serializer.errors}, status=400)
             d = serializer.validated_data
-            presigned_data = None
             public_url = None
             image_file = request.FILES.get('profile_image')
             if image_file:
                 try:
-                    presigned_data = generate_profile_image_presigned_url(user, image_file)
-                    public_url = presigned_data['public_url']
+                    public_url = upload_image(user, image_file)
                 except ValueError as e:
                     return Response({'success': False, 'error': str(e)}, status=400)
             try:
@@ -414,17 +572,81 @@ class NurseDetailsView(APIView):
                              'user': {'user_id':user.id,'username':user.username,'email':user.email,'role':'nurse',
                                       'profile_id':nurse.id,'department':nurse.department,'employee_id':nurse.employee_id,'is_approved':nurse.is_approved,
                                       'is_profile_complete':True,'profile_image':nurse.profile_image,},}
-            if presigned_data:
-                response_data['image_upload'] = {'presigned_url': presigned_data['presigned_url'],'public_url':presigned_data['public_url'],
-                                                 'expires_in':presigned_data['expires_in'],}
             return Response(response_data, status=201)
         except Exception as e:
             logger.error(f"Nurse profile error: {e}")
             return Response({'success': False, 'error': 'Profile creation failed.'}, status=500)
+        
+    @extend_schema(
+    tags=['Profile Completion'],
+    summary='Get nurse profile',
+    responses={200: NurseDetailsSerializer})
+    def get(self, request):
+        if request.user.role != 'nurse':
+            return Response({'success': False, 'error': 'Access denied.'}, status=403)
+        try:
+            n = Nurse.objects.get(user=request.user)
+        except Nurse.DoesNotExist:
+            return Response({'success': False, 'error': 'Profile not found. Please complete your profile first.'}, status=404)
+        return Response({'success': True,'user': {'user_id' : request.user.id,'username' : request.user.username,'email' : request.user.email,'role' : 'nurse',
+                                                  'is_profile_complete': request.user.is_profile_complete,'profile_id' : n.id,'first_name' : n.first_name,
+                                                  'last_name' : n.last_name,'date_of_birth' : n.date_of_birth,'gender' : n.gender,'blood_group' : n.blood_group,
+                                                  'phone_number' : n.phone_number,'department' : n.department,'qualification' : n.qualification,'years_of_experience': n.years_of_experience,
+                                                  'employee_id' : n.employee_id,'city' : n.city,'state' : n.state,'country' : n.country,'profile_image' : n.profile_image,'is_approved' : n.is_approved,}})
+
+    @extend_schema(
+    tags=['Profile Completion'],
+    summary='Update nurse profile',
+    request=NurseDetailsSerializer,
+    responses={200: NurseDetailsSerializer})
+    @transaction.atomic
+    def patch(self, request):
+        if request.user.role != 'nurse':
+            return Response({'success': False, 'error': 'Access denied.'}, status=403)
+        try:
+            n = Nurse.objects.get(user=request.user)
+        except Nurse.DoesNotExist:
+            return Response({'success': False, 'error': 'Profile not found.'}, status=404)
+        data = request.data
+        if 'first_name' in data:
+            n.first_name = data['first_name'].strip()
+        if 'last_name' in data:
+            n.last_name = data['last_name'].strip()
+        if 'date_of_birth' in data:
+            n.date_of_birth = data['date_of_birth']
+        if 'gender' in data:
+            n.gender = data['gender']
+        if 'blood_group' in data:
+            n.blood_group = data['blood_group']
+        if 'phone_number' in data:
+            n.phone_number = data['phone_number']
+        if 'department' in data:
+            n.department = data['department']
+        if 'qualification' in data:
+            n.qualification = data['qualification']
+        if 'years_of_experience' in data:
+            n.years_of_experience = data['years_of_experience']
+        if 'city' in data:
+            n.city = data['city']
+        if 'state' in data:
+            n.state = data['state']
+        if 'country' in data:
+            n.country = data['country']
+        image_file = request.FILES.get('profile_image')
+        if image_file:
+            try:
+                n.profile_image = upload_image(request.user, image_file)
+            except ValueError as e:
+                return Response({'success': False, 'error': str(e)}, status=400)
+        n.save()
+        return Response({'success': True,'message': 'Profile updated successfully.',
+                         'user': {'user_id' : request.user.id,'email' : request.user.email,'role' : 'nurse',
+                                  'first_name' : n.first_name,'last_name' : n.last_name,'gender' : n.gender,'department' : n.department,
+                                  'profile_image' : n.profile_image,'is_approved' : n.is_approved,}})
 
 class PharmacistDetailsView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes     = [MultiPartParser, FormParser]  
+    parser_classes = [MultiPartParser, FormParser]  
     @extend_schema(
         tags=['Profile Completion'], summary='Complete pharmacist profile',
         request=PharmacistDetailsSerializer,
@@ -442,13 +664,11 @@ class PharmacistDetailsView(APIView):
             if not serializer.is_valid():
                 return Response({'success': False, 'errors': serializer.errors}, status=400)
             d = serializer.validated_data
-            presigned_data = None
             public_url = None
             image_file = request.FILES.get('profile_image')
             if image_file:
                 try:
-                    presigned_data = generate_profile_image_presigned_url(user, image_file)
-                    public_url = presigned_data['public_url']
+                    public_url = upload_image(user, image_file)
                 except ValueError as e:
                     return Response({'success': False, 'error': str(e)}, status=400)
             try:
@@ -475,13 +695,77 @@ class PharmacistDetailsView(APIView):
                              'user': {'user_id' : user.id,'username' : user.username,'email' : user.email,'role' : 'pharmacist',
                                       'profile_id' : pharmacist.id,'license_number' : pharmacist.license_number,'employee_id' : pharmacist.employee_id,
                                       'is_approved' : pharmacist.is_approved,'is_profile_complete': True,'profile_image' : pharmacist.profile_image, },}
-            if presigned_data:
-                response_data['image_upload'] = {'presigned_url': presigned_data['presigned_url'],'public_url' : presigned_data['public_url'],
-                                                 'expires_in' : presigned_data['expires_in'],}
             return Response(response_data, status=201)
         except Exception as e:
             logger.error(f"Pharmacist profile error: {e}")
             return Response({'success': False, 'error': 'Profile creation failed.'}, status=500)
+    @extend_schema(
+    tags=['Profile Completion'],
+    summary='Get pharmacist profile',
+    responses={200: PharmacistDetailsSerializer},) 
+    def get(self, request):
+        if request.user.role != 'pharmacist':
+            return Response({'success': False, 'error': 'Access denied.'}, status=403)
+        try:
+            ph = Pharmacist.objects.get(user=request.user)
+        except Pharmacist.DoesNotExist:
+            return Response({'success': False, 'error': 'Profile not found. Please complete your profile first.'}, status=404)
+        return Response({'success': True,'user': {'user_id': request.user.id,'username': request.user.username,'email': request.user.email,
+                                                  'role': 'pharmacist','is_profile_complete': request.user.is_profile_complete,'profile_id': ph.id,
+                                                  'first_name': ph.first_name,'last_name': ph.last_name,'date_of_birth': ph.date_of_birth,'gender' : ph.gender,
+                                                  'blood_group' : ph.blood_group,'phone_number' : ph.phone_number,'license_number' : ph.license_number,'qualification' : ph.qualification,
+                                                  'years_of_experience': ph.years_of_experience,'employee_id' : ph.employee_id,'city' : ph.city,'state' : ph.state,'country' : ph.country,
+                                                  'profile_image' : ph.profile_image,'is_approved' : ph.is_approved,}})
+
+    @extend_schema(
+    tags=['Profile Completion'],
+    summary='Update pharmacist profile',
+    request=PharmacistDetailsSerializer,
+    responses={200: PharmacistDetailsSerializer},)
+    @transaction.atomic
+    def patch(self, request):
+        if request.user.role != 'pharmacist':
+            return Response({'success': False, 'error': 'Access denied.'}, status=403)
+        try:
+            ph = Pharmacist.objects.get(user=request.user)
+        except Pharmacist.DoesNotExist:
+            return Response({'success': False, 'error': 'Profile not found.'}, status=404)
+        data = request.data
+        if 'first_name' in data:
+            ph.first_name = data['first_name'].strip()
+        if 'last_name' in data:
+            ph.last_name = data['last_name'].strip()
+        if 'date_of_birth' in data:
+            ph.date_of_birth = data['date_of_birth']
+        if 'gender' in data:
+            ph.gender = data['gender']
+        if 'blood_group' in data:
+            ph.blood_group = data['blood_group']
+        if 'phone_number' in data:
+            ph.phone_number = data['phone_number']
+        if 'license_number' in data:
+            ph.license_number = data['license_number']
+        if 'qualification' in data:
+            ph.qualification = data['qualification']
+        if 'years_of_experience' in data:
+            ph.years_of_experience = data['years_of_experience']
+        if 'city' in data:
+            ph.city = data['city']
+        if 'state' in data:
+            ph.state = data['state']
+        if 'country' in data:
+            ph.country = data['country']
+        image_file = request.FILES.get('profile_image')
+        if image_file:
+            try:
+                ph.profile_image = upload_image(request.user, image_file)
+            except ValueError as e:
+                return Response({'success': False, 'error': str(e)}, status=400)
+        ph.save()
+        return Response({'success': True,'message': 'Profile updated successfully.',
+                         'user': {'user_id' : request.user.id,'email' : request.user.email,'role' : 'pharmacist','first_name' : ph.first_name,
+                                  'last_name' : ph.last_name,'gender' : ph.gender,'license_number' : ph.license_number,'profile_image' : ph.profile_image,
+                                  'is_approved' : ph.is_approved,}})
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
