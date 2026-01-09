@@ -17,3 +17,5 @@ channels-redis
 daphne
 redis
 boto3
+Pillow
+django-storages
