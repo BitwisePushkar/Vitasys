@@ -1,4 +1,4 @@
-name: Deploy Medtrax (Dockerized)
+name: Deploy vitasys (Dockerized)
 
 on:
   push:
@@ -32,12 +32,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push medtrax image
+      - name: Build and push vitasys image
         run: |
           docker buildx build \
             --cache-from=type=local,src=/tmp/.buildx-cache \
             --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
-            -t agrim96336/medtrax-web:latest \
+            -t agrim96336/vitasys-web:latest \
             -f Dockerfile \
             --push .
 
@@ -53,17 +53,17 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/ubuntu/medtrax-hms
+            cd /home/ubuntu/vitasys-hms
             git pull origin main
             sudo docker compose down --remove-orphans
             sudo docker compose pull web
             sudo docker compose up -d
             sleep 15
-            sudo docker cp medtrax-web:/app/static /home/ubuntu/medtrax-hms/ || true
-            sudo docker cp medtrax-web:/app/media /home/ubuntu/medtrax-hms/ || true
-            sudo chown -R ubuntu:ubuntu /home/ubuntu/medtrax-hms/static
-            sudo chown -R ubuntu:ubuntu /home/ubuntu/medtrax-hms/media
-            sudo chmod -R 755 /home/ubuntu/medtrax-hms/static
-            sudo chmod -R 755 /home/ubuntu/medtrax-hms/media
+            sudo docker cp vitasys-web:/app/static /home/ubuntu/vitasys-hms/ || true
+            sudo docker cp vitasys-web:/app/media /home/ubuntu/vitasys-hms/ || true
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/vitasys-hms/static
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/vitasys-hms/media
+            sudo chmod -R 755 /home/ubuntu/vitasys-hms/static
+            sudo chmod -R 755 /home/ubuntu/vitasys-hms/media
             sudo systemctl restart nginx
             sudo docker system prune -f

@@ -1,101 +1,134 @@
-# 🏥 Vitasys – Hospital Management System
+# Vitasys
 
-A scalable, real-time **Hospital Management System** powered by **FastAPI**.
-Designed to streamline healthcare workflows — **patients ↔ doctors ↔ appointments ↔ consultations ↔ prescriptions** — all in one platform.
+> Scalable, real-time **Hospital Management System** built to streamline healthcare workflows — connecting **patients, doctors, appointments, consultations, and prescriptions** into one unified platform.
 
----
-
-## 🚀 Tech Stack
-
-`Django : Python : PostgreSQL :  Redis : WebSockets : Celery : Celery Beat : JWT : AWS S3 : Docker`
+Vitasys delivers a seamless digital healthcare experience with **real-time communication**, **secure data handling**, and **high-performance APIs**.
 
 ---
 
-## 🌟 Core Functionality
+## Tech Stack
 
-### 🔐 Auth
-
-Register · Login · Logout · Refresh Token · Password Reset · Email Verification
-
----
-
-### 👤 Users
-
-Patient & Doctor Profiles · Role-based Access · Avatar Upload · Account Management
-
----
-
-### 🧑‍⚕️ Doctor Dashboard
-
-Patient Management · Appointment Scheduling · Prescription Creation
-Medical History Access · Consultation Tools
+| Layer      | Technologies                   |
+| ---------- | ------------------------------ |
+| Backend    | Django · Django REST Framework |
+| Database   | PostgreSQL                     |
+| Realtime   | WebSockets · Redis             |
+| Background | Celery · Celery Beat · Redis   |
+| Auth       | JWT · Email Verification       |
+| Storage    | AWS S3                         |
+| Infra      | Docker · Docker Compose · uv   |
 
 ---
 
-### 🧑 Patient Dashboard
+## What Vitasys Does
 
-Book Appointments · View Prescriptions · Medical Records
-Track Health History · Join Consultations
+### Authentication
 
----
+Complete auth lifecycle:
 
-### 📅 Appointments
-
-Book · Reschedule · Cancel · Doctor Availability
-Automated Reminders & Status Tracking
-
----
-
-### 💊 Prescriptions
-
-Digital Prescriptions · Medication Details · Download & History
-Doctor-issued secure records
+* Register · Login · Logout
+* Refresh Tokens (JWT)
+* Email Verification
+* Password Reset
 
 ---
 
-### 🎥 Video Consultation
+### User Management
 
-Real-time Doctor ↔ Patient Video Calls
-Secure & low-latency communication
-
----
-
-### 💬 Chat System
-
-Private Chat Rooms · Doctor-Patient Messaging
-Real-time messaging powered by **WebSockets**
+* Patient & Doctor Profiles
+* Role-Based Access Control
+* Avatar Upload
+* Account Management
 
 ---
 
-### 📂 Media Sharing
+### Doctor Dashboard
 
-Upload & Share Images · Files · Medical Reports
-Stored securely using **AWS S3**
-
----
-
-### 🌐 Community
-
-Health Discussions · Public/Private Rooms · Patient Engagement
-Knowledge sharing between users
+* Patient Management
+* Appointment Scheduling
+* Prescription Creation
+* Access Medical History
+* Consultation Tools
 
 ---
 
-### 🔔 Notifications
+### Patient Dashboard
 
-Real-time Alerts · Appointment Reminders · System Updates
-Unread Counts & Preferences
-
----
-
-### 📊 Dashboard
-
-Personal Health Insights · Appointment Stats
-Doctor Analytics & Patient Overview
+* Book & Manage Appointments
+* View Prescriptions
+* Access Medical Records
+* Track Health History
+* Join Consultations
 
 ---
 
-## ⚡ Real-Time Features
+### Appointments
+
+* Book · Reschedule · Cancel
+* Doctor Availability Tracking
+* Automated Reminders
+* Status Updates
+
+---
+
+### Prescriptions
+
+* Digital Prescriptions
+* Medication Details
+* Download & History
+* Secure Doctor-Issued Records
+
+---
+
+### Video Consultation
+
+* Real-time Doctor ↔ Patient Calls
+* Secure, Low-Latency Communication
+
+---
+
+### Chat System
+
+* Private Chat Rooms
+* Doctor-Patient Messaging
+* Powered by **WebSockets**
+
+---
+
+### Media Sharing
+
+* Upload Images · Files · Reports
+* Secure storage via **AWS S3**
+
+---
+
+### Community
+
+* Health Discussions
+* Public & Private Rooms
+* Patient Engagement
+
+---
+
+### Notifications
+
+* Real-time Alerts
+* Appointment Reminders
+* System Updates
+* Unread Counts & Preferences
+
+---
+
+### Dashboard & Analytics
+
+* Personal Health Insights
+* Appointment Statistics
+* Doctor Analytics
+* Patient Overview
+
+---
+
+## Real-Time Capabilities
 
 Powered by **WebSockets + Redis**
 
@@ -106,7 +139,7 @@ Powered by **WebSockets + Redis**
 
 ---
 
-## 🔄 Background Tasks
+## Background Processing
 
 Powered by **Celery + Redis**
 
@@ -117,36 +150,101 @@ Powered by **Celery + Redis**
 
 ---
 
-## 🧠 System Highlights
+## System Highlights
 
 * Dual Dashboard (**Doctor & Patient**)
-* Real-time Communication (Chat + Video)
+* Real-time Communication (**Chat + Video**)
 * Scalable Architecture
 * Cloud Storage Integration
-* Async & High Performance APIs
+* Async & High-Performance APIs
 
 ---
 
-## ▶ Setup (Local)
+## Project Structure
+
+```text
+Vitasys/ (Root)
+├── Vitasys/ (Main Folder)
+│   ├── Vitasys/ (Core Settings)
+│   ├── manage.py
+│   └── apps/ (auth, appointments, etc.)
+├── Dockerfile
+├── docker-compose.yml
+├── pyproject.toml
+└── uv.lock
+```
+
+---
+
+## Local Setup
+
+### Prerequisites
+
+* Python 3.10+
+* uv
+* PostgreSQL
+* Redis
+
+---
+
+### Installation
 
 ```bash
 git clone <repo>
-cd vitasys
+cd Vitasys
 
-python -m venv venv
-source venv/bin/activate   # windows: venv\Scripts\activate
-
-pip install -r requirements.txt
-
-uvicorn app.main:app --reload --port 80
+uv sync
 ```
-
-Docs → `http://localhost/api/docs`
 
 ---
 
-## 🐳 Setup (Docker)
+### Run Migrations
+
+```bash
+uv run python Vitasys/manage.py migrate
+```
+
+---
+
+### Start Server
+
+```bash
+uv run python Vitasys/manage.py runserver
+```
+
+---
+
+### API Docs
+
+```
+http://localhost:8000/api/docs
+```
+
+---
+
+## Docker Setup
 
 ```bash
 docker-compose up --build
+```
+
+---
+
+## Usage
+
+### With `uv run`
+
+```bash
+uv run python Vitasys/manage.py runserver
+```
+
+---
+
+### With Virtual Environment
+
+```bash
+source .venv/bin/activate   # Linux/macOS
+.venv\Scripts\Activate.ps1  # Windows
+
+python Vitasys/manage.py runserver
 ```

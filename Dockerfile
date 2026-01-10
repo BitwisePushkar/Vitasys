@@ -1,23 +1,22 @@
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PYTHONPATH=/app/apps
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
 WORKDIR /app
 
-COPY requirements.txt /app/
-RUN apt-get update && apt-get install -y netcat-traditional && \
-    pip install --upgrade pip && pip install -r requirements.txt && \
-    rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml uv.lock /app/
+RUN uv sync --frozen --no-install-project
 
 COPY . /app/
-COPY .env .env
 
-RUN mkdir -p /app/static /app/media && \
-    chmod -R 755 /app/static /app/media
+WORKDIR /app/Vitasys
+
+RUN mkdir -p /app/Vitasys/static /app/Vitasys/media && \
+    chmod -R 755 /app/Vitasys/static /app/Vitasys/media
 
 EXPOSE 8000
 
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "medtrax.asgi:application"]
+CMD ["uv", "run", "daphne", "-b", "0.0.0.0", "-p", "8000", "Vitasys.asgi:application"]

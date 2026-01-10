@@ -1,25 +1,25 @@
 services:
   db:
     image: postgres:15
-    container_name: medtrax-db
+    container_name: vitasys-db
     restart: always
     environment:
-      POSTGRES_DB: medtraxdata
-      POSTGRES_USER: medtraxadmin
-      POSTGRES_PASSWORD: Medtrax2025
+      POSTGRES_DB: vitasysdata
+      POSTGRES_USER: vitasysadmin
+      POSTGRES_PASSWORD: vitasys2025
     volumes:
       - postgres_data:/var/lib/postgresql/data
     expose:
       - "5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U medtraxadmin"]
+      test: ["CMD-SHELL", "pg_isready -U vitasysadmin"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7
-    container_name: medtrax-redis
+    container_name: vitasys-redis
     command: ["redis-server"]
     restart: always
     expose:
@@ -34,18 +34,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: medtrax-web
+    container_name: vitasys-web
     command: >
       sh -c "
         while ! nc -z db 5432; do sleep 1; done &&
-        python manage.py migrate &&
-        python manage.py collectstatic --noinput &&
-        daphne -b 0.0.0.0 -p 8000 medtrax.asgi:application
+        uv run python manage.py migrate &&
+        uv run python manage.py collectstatic --noinput &&
+        uv run daphne -b 0.0.0.0 -p 8000 Vitasys.asgi:application
       "
     volumes:
       - .:/app
-      - static_volume:/app/static
-      - media_volume:/app/media
+      - static_volume:/app/Vitasys/static
+      - media_volume:/app/Vitasys/media
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -59,8 +59,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: medtrax-celery
-    command: sh -c "sleep 15 && celery -A medtrax worker --loglevel=info"
+    container_name: vitasys-celery
+    command: sh -c "sleep 15 && uv run celery -A Vitasys worker --loglevel=info"
     volumes:
       - .:/app
     depends_on:
@@ -73,8 +73,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: medtrax-celery-beat
-    command: sh -c "sleep 20 && celery -A medtrax beat --loglevel=info"
+    container_name: vitasys-celery-beat
+    command: sh -c "sleep 20 && uv run celery -A Vitasys beat --loglevel=info"
     volumes:
       - .:/app
     depends_on:
